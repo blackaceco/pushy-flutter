@@ -18,7 +18,7 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.view.FlutterCallbackInformation;
-import io.flutter.view.FlutterMain;
+// import io.flutter.view.FlutterMain;
 import me.pushy.sdk.config.PushyLogging;
 import me.pushy.sdk.flutter.PushyPlugin;
 import me.pushy.sdk.flutter.config.PushyChannels;
@@ -86,10 +86,7 @@ public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
         if (appBundlePath != null) {
             // We need to create an instance of `FlutterEngine` before looking up the callback
             // If we don't, the callback cache won't be initialized and the lookup will fail
-            mBackgroundFlutterEngine = new FlutterEngine(context, 
-            new FlutterEngine.Builder(context)
-                .setDartEntrypoint(flutterCallback)
-                .build());
+            mBackgroundFlutterEngine = new FlutterEngine(context);
 
             // Attempt to look up the _isolate() callback by its handle
             FlutterCallbackInformation flutterCallback = FlutterCallbackInformation.lookupCallbackInformation(isolateCallbackId);
@@ -102,12 +99,7 @@ public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
 
             // Dart code executor
             DartExecutor executor = mBackgroundFlutterEngine.getDartExecutor();
-            executor.executeDartEntrypoint(
-                new DartExecutor.DartEntrypoint(
-                    FlutterInjector.instance().flutterLoader().findAppBundlePath(),
-                    flutterCallback.callbackName
-                )
-            );
+
             // Initialize a dedicate channel for communicating with the background isolate
             initializeBackgroundMethodChannel(executor);
 
@@ -181,15 +173,6 @@ public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
         // Initialize a new one and return it
         mInstance = new PushyFlutterBackgroundExecutor();
         return mInstance;
-    }
-
-    public void cleanup() {
-        if (mBackgroundFlutterEngine != null) {
-            mBackgroundFlutterEngine.destroy();
-            mBackgroundFlutterEngine = null;
-        }
-        mIsIsolateRunning = false;
-        mBackgroundChannel = null;
     }
 
 }

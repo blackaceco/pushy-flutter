@@ -10,8 +10,7 @@ import android.content.res.Resources;
 import me.pushy.sdk.flutter.config.PushyIntentExtras;
 
 public class PushyNotification {
-    @NonNull
-    public static int getNotificationIcon(@NonNull Context context) {
+    public static int getNotificationIcon(Context context) {
         try {
             // Try to query for app metadata
             ApplicationInfo app = context.getPackageManager().getApplicationInfo(context.getPackageName(), PackageManager.GET_META_DATA);
@@ -61,26 +60,6 @@ public class PushyNotification {
 
         // Fallback to generic icon
         return android.R.drawable.ic_dialog_info;
-    }
-
-    public static PendingIntent getMainActivityPendingIntent(Context context, String payload) {
-        Intent launchIntent = context.getPackageManager()
-            .getLaunchIntentForPackage(context.getApplicationContext().getPackageName());
-        
-        if (launchIntent == null) {
-            return null;
-        }
-        
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        launchIntent.putExtra(PushyIntentExtras.NOTIFICATION_CLICKED, true);
-        launchIntent.putExtra(PushyIntentExtras.NOTIFICATION_PAYLOAD, payload);
-        
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            flags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        
-        return PendingIntent.getActivity(context, payload.hashCode(), launchIntent, flags);
     }
 
     public static PendingIntent getMainActivityPendingIntent(Context context, String payload) {

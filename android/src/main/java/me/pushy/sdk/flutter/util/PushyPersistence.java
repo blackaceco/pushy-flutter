@@ -19,35 +19,23 @@ import me.pushy.sdk.util.PushySingleton;
 public class PushyPersistence {
     public static final String NOTIFICATION_ICON = "pushyNotificationIcon";
     public static final String PENDING_NOTIFICATIONS = "pushyPendingNotifications";
-    private static final Object sLock = new Object();
-
-    
-    public static void persistNotification(@NonNull JSONObject notification, @NonNull Context context) {
-        synchronized (sLock) {
-            JSONArray pendingNotifications = getPendingNotifications(context);
-            pendingNotifications.put(notification);
-            
-            SharedPreferences.Editor editor = getSettings(context).edit();
-            editor.putString(PENDING_NOTIFICATIONS, pendingNotifications.toString());
-            editor.apply(); // Use apply() instead of commit() for better performance
-        }
-    }
 
     public static SharedPreferences getSettings(Context context) {
         // Get default app SharedPreferences
         return PreferenceManager.getDefaultSharedPreferences(context);
     }
 
-    public static void persistNotification(@NonNull JSONObject notification, @NonNull Context context) {
-        synchronized (sLock) {
-            JSONArray pendingNotifications = getPendingNotifications(context);
-            pendingNotifications.put(notification);
-            
-            SharedPreferences.Editor editor = getSettings(context).edit();
-            editor.putString(PENDING_NOTIFICATIONS, pendingNotifications.toString());
-            editor.apply(); // Use apply() instead of commit() for better performance
-        }
+    public static void persistNotification(JSONObject notification, Context context) {
+        // Get pending notifications from SharedPreferences
+        JSONArray pendingNotifications = getPendingNotifications(context);
+
+        // Add new notification
+        pendingNotifications.put(notification);
+
+        // Store notification JSON array in SharedPreferences
+        getSettings(context).edit().putString(PushyPersistence.PENDING_NOTIFICATIONS, pendingNotifications.toString()).commit();
     }
+
     public static void setNotificationIcon(String icon, Context context) {
         // Store notification icon in SharedPreferences
         getSettings(context).edit().putString(PushyPersistence.NOTIFICATION_ICON, icon).commit();
@@ -58,19 +46,29 @@ public class PushyPersistence {
         return getSettings(context).getString(PushyPersistence.NOTIFICATION_ICON, null);
     }
 
-    @NonNull
-    public static JSONArray getPendingNotifications(@NonNull Context context) {
-        synchronized (sLock) {
-            String pendingNotifications = PushySingleton.getSettings(context)
-                .getString(PENDING_NOTIFICATIONS, "[]");
-            
-            try {
-                return new JSONArray(pendingNotifications);
-            } catch (JSONException e) {
-                Log.e(PushyLogging.TAG, "Failed to parse pending notifications", e);
-                return new JSONArray();
-            }
+    public static JSONArray getPendingNotifications(Context context) {
+        // Get pending notifications from SharedPreferences
+        String pendingNotifications = PushySingleton.getSettings(context).getString(PENDING_NOTIFICATIONS, null);
+
+        // Prepare JSON array with notifications
+        JSONArray json = new JSONArray();
+
+        // Nothing persisted?
+        if (pendingNotifications == null) {
+            return json;
         }
+
+        try {
+            // Attempt to parse string into JSON array
+            json = new JSONArray(pendingNotifications);
+        }
+        catch (JSONException e) {
+            // Log error to logcat
+            Log.e(PushyLogging.TAG, "Failed to convert JSON string into array:" + e.getMessage(), e);
+        }
+
+        // Always return JSON array
+        return json;
     }
 
     public static void clearPendingNotifications(Context context) {
@@ -104,13 +102,4 @@ public class PushyPersistence {
         // All done
         return json;
     }
-
-    public static void cleanup(@NonNull Context context) {
-        synchronized (sLock) {
-            SharedPreferences.Editor editor = getSettings(context).edit();
-            editor.remove(PENDING_NOTIFICATIONS);
-            editor.apply();
-        }
-    }
-
 }
