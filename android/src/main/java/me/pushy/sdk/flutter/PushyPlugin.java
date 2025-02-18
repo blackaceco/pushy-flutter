@@ -57,20 +57,20 @@ public class PushyPlugin implements FlutterPlugin, ActivityAware, MethodChannel.
     static Activity mActivity;
     static EventChannel.EventSink mNotificationListener;
 
-    /**
-     * Backward compatibility for Flutter apps that use the legacy (v1) Android embedding.
-     *
-     * @param registrar a PluginRegistry.Registrar instance.
-     */
-    public static void registerWith(Registrar registrar) {
-        PushyPlugin instance = new PushyPlugin();
-        instance.setupPlugin(registrar.context(), registrar.messenger());
-        // If an activity is available, set it and add the NewIntent listener.
-        mActivity = registrar.activity();
-        if (registrar.activity() != null) {
-            registrar.addNewIntentListener(instance);
-        }
-    }
+    // /**
+    //  * Backward compatibility for Flutter apps that use the legacy (v1) Android embedding.
+    //  *
+    //  * @param registrar a PluginRegistry.Registrar instance.
+    //  */
+    // public static void registerWith(Registrar registrar) {
+    //     PushyPlugin instance = new PushyPlugin();
+    //     instance.setupPlugin(registrar.context(), registrar.messenger());
+    //     // If an activity is available, set it and add the NewIntent listener.
+    //     mActivity = registrar.activity();
+    //     if (registrar.activity() != null) {
+    //         registrar.addNewIntentListener(instance);
+    //     }
+    // }
 
     /**
      * Called when the plugin is attached to the FlutterEngine.
