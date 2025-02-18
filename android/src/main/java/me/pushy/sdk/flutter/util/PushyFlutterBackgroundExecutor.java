@@ -11,22 +11,21 @@ import io.flutter.FlutterInjector;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.dart.DartExecutor;
 import io.flutter.embedding.engine.dart.DartExecutor.DartCallback;
+import io.flutter.embedding.engine.loader.FlutterCallbackInformation;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.JSONMethodCodec;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.view.FlutterCallbackInformation;
-import io.flutter.view.FlutterMain;
 import me.pushy.sdk.config.PushyLogging;
 import me.pushy.sdk.flutter.PushyPlugin;
 import me.pushy.sdk.flutter.config.PushyChannels;
 import me.pushy.sdk.flutter.config.PushySharedPrefs;
 
 public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
-    private boolean mIsIsolateRunning;
 
+    private boolean mIsIsolateRunning;
     private MethodChannel mBackgroundChannel;
     private FlutterEngine mBackgroundFlutterEngine;
 
@@ -66,7 +65,7 @@ public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
         // Log initialization
         Log.d(PushyLogging.TAG, "Initializing FlutterBackgroundExecutor background isolate");
 
-        // Store context for later
+        // Store context
         mContext = context;
 
         // Persist callback handles in SharedPreferences for when process is terminated
@@ -74,9 +73,8 @@ public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
 
         // Get assets and app bundle path
         AssetManager assets = context.getAssets();
-        
-        // Fix for NullPointerException when calling findAppBundlePath() in background
-        // https://github.com/transistorsoft/flutter_background_fetch/issues/160#issuecomment-751667361
+
+        // Start initialization using the new API provided by FlutterInjector
         FlutterInjector.instance().flutterLoader().startInitialization(context);
 
         // Get app bundle path as string
@@ -84,95 +82,87 @@ public class PushyFlutterBackgroundExecutor implements MethodCallHandler {
 
         // Null safety check
         if (appBundlePath != null) {
-            // We need to create an instance of `FlutterEngine` before looking up the callback
-            // If we don't, the callback cache won't be initialized and the lookup will fail
+            // Create an instance of FlutterEngine before looking up the callback.
             mBackgroundFlutterEngine = new FlutterEngine(context);
 
-            // Attempt to look up the _isolate() callback by its handle
+            // Look up the _isolate() callback by its handle.
+            // Note: Make sure to update the import so that FlutterCallbackInformation comes
+            // from io.flutter.embedding.engine.loader instead of the old package.
             FlutterCallbackInformation flutterCallback = FlutterCallbackInformation.lookupCallbackInformation(isolateCallbackId);
-
-            // Notify in case of failure
             if (flutterCallback == null) {
                 Log.e(PushyLogging.TAG, "Failed to locate _isolate() callback");
                 return;
             }
 
-            // Dart code executor
+            // Get the dart executor of the new engine.
             DartExecutor executor = mBackgroundFlutterEngine.getDartExecutor();
 
-            // Initialize a dedicate channel for communicating with the background isolate
+            // Initialize a dedicated channel for communicating with the background isolate.
             initializeBackgroundMethodChannel(executor);
 
-            // Execute the callback (when it's done it will invoke a method call to "notificationCallbackReady")
+            // Execute the callback which in turn will initialize the Dart background isolate.
             executor.executeDartCallback(new DartCallback(assets, appBundlePath, flutterCallback));
         }
     }
 
     public static void persistCallbackHandleIds(Context context, long isolateCallbackId, long notificationHandlerCallbackId) {
-        // Get shared preferences handle
+        // Get shared preferences handle.
         SharedPreferences sharedPreferences = PushyPersistence.getSettings(context);
 
-        // Store callback handle IDs
+        // Store callback handle IDs.
         sharedPreferences.edit().putLong(PushySharedPrefs.FLUTTER_ISOLATE_ID, isolateCallbackId).apply();
         sharedPreferences.edit().putLong(PushySharedPrefs.FLUTTER_NOTIFICATION_HANDLER_ID, notificationHandlerCallbackId).apply();
     }
 
-    private void initializeBackgroundMethodChannel(BinaryMessenger isolate) {
-        // Initialize a dedicated channel for communicating with the background isolate
-        mBackgroundChannel = new MethodChannel(isolate, PushyChannels.BACKGROUND_CHANNEL, JSONMethodCodec.INSTANCE);
+    private void initializeBackgroundMethodChannel(BinaryMessenger messenger) {
+        // Initialize a dedicated channel for communicating with the background isolate.
+        mBackgroundChannel = new MethodChannel(messenger, PushyChannels.BACKGROUND_CHANNEL, JSONMethodCodec.INSTANCE);
 
-        // Handle method calls in this class (onMethodCall())
+        // Handle method calls in this class.
         mBackgroundChannel.setMethodCallHandler(this);
     }
 
     @Override
     public void onMethodCall(MethodCall call, Result result) {
-        // Notification callback ready event
-        if (call.method.equals("notificationCallbackReady")) {
-            // Log Dart background isolate / Dart method channel initialization
+        if ("notificationCallbackReady".equals(call.method)) {
+            // Notification callback ready event.
             Log.d(PushyLogging.TAG, "Isolate called notificationCallbackReady()");
 
-            // Background isolate is ready to forward messages to notification handler callback
+            // Mark the isolate as running.
             onIsolateInitialized();
 
-            // Send back success
+            // Send back success.
             result.success(true);
         }
     }
 
     private void onIsolateInitialized() {
-        // Isolate reported it is running
         mIsIsolateRunning = true;
-
-        // Attempt to deliver any pending notifications (from when activity was closed)
+        // Attempt to deliver any pending notifications if necessary.
         PushyPlugin.deliverPendingNotifications(mContext);
     }
 
     public void invokeDartNotificationHandler(JSONObject notification, Context context) {
-        // Get shared preferences handle
+        // Get shared preferences handle.
         SharedPreferences sharedPreferences = PushyPersistence.getSettings(context);
 
-        // Retrieve stored notification handler callback handle ID
+        // Retrieve stored notification handler callback handle ID.
         long notificationHandlerCallbackId = sharedPreferences.getLong(PushySharedPrefs.FLUTTER_NOTIFICATION_HANDLER_ID, 0);
 
-        // Pass notification (as JSON string) to notification handler through background channel
-        mBackgroundChannel.invokeMethod("onNotificationReceived", new Object[] {notificationHandlerCallbackId, notification.toString()},null);
+        // Invoke the method on the background channel to handle the notification.
+        mBackgroundChannel.invokeMethod("onNotificationReceived",
+                new Object[] {notificationHandlerCallbackId, notification.toString()}, null);
     }
 
     private static boolean isInitialized() {
-        // Singleton instance null check
         return mInstance != null;
     }
 
     public static PushyFlutterBackgroundExecutor getSingletonInstance() {
-        // Check for existing instance
         if (mInstance != null) {
             return mInstance;
         }
-
-        // Initialize a new one and return it
         mInstance = new PushyFlutterBackgroundExecutor();
         return mInstance;
     }
-
 }
